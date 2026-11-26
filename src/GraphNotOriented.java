@@ -1,94 +1,118 @@
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 
 public class GraphNotOriented<T> extends Graph<T> {
 
+    // arco di supporto per kruskal
+    private static class Edge<T> implements Comparable<Edge<T>> {
+        T source;
+        T dest;
+        float weight;
+
+        Edge(T source, T dest, float weight) {
+            this.source = source;
+            this.dest = dest;
+            this.weight = weight;
+        }
+
+        @Override
+        public int compareTo(Edge<T> altro) {
+            return Float.compare(weight, altro.weight);
+        }
+    }
+
     @Override
     public void addEdge(T source, T dest, float weight) {
-        Node<T> startNode = nodes.get(source);
-        Node<T> destNode = nodes.get(dest);
-
-        if (startNode != null && destNode != null) {
-            startNode.addAdjacency(destNode, weight);
-            destNode.addAdjacency(startNode, weight);
-        } else {
-            System.out.println("One or both nodes do not exist.");
-        }
+        addNode(source);
+        addNode(dest);
+        nodes.get(source).put(dest, new Adiacenza<>(dest, weight));
+        nodes.get(dest).put(source, new Adiacenza<>(source, weight));
     }
 
-    private class Arco {
-        T da, a;
-        float peso;
-        Arco(T da, T a, float peso) {
-            this.da = da; this.a = a; this.peso = peso;
+    // union-find: rappresentante dell'insieme di n
+    private T find(HashMap<T, T> parent, T n) {
+        while (!parent.get(n).equals(n)) {
+            parent.put(n, parent.get(parent.get(n))); 
+            n = parent.get(n);
         }
+        return n;
     }
 
-    public GraphNotOriented<T> prim(T radix) {
-        GraphNotOriented<T> mst = new GraphNotOriented<>();
-        if (!nodes.containsKey(radix)) return mst;
+    // Albero di copertura minimo ( se il grafo non e' connesso)
+    public GraphNotOriented<T> kruskal() {
+        ArrayList<T> keys = new ArrayList<>(nodes.keySet());
 
-        HashSet<T> visitati = new HashSet<>();
-        PriorityQueue<Arco> codaArchi = new PriorityQueue<>((a, b) -> Float.compare(a.peso, b.peso));
-
-        mst.addNode(radix);
-        visitati.add(radix);
-
-        for (var entry : nodes.get(radix).getAdjacencies().entrySet()) {
-            codaArchi.add(new Arco(radix, entry.getKey().getValue(), entry.getValue()));
-        }
-
-        while (!codaArchi.isEmpty()) {
-            Arco arcoMinimo = codaArchi.poll();
-
-            if (visitati.contains(arcoMinimo.a)) continue;
-
-            mst.addNode(arcoMinimo.a);
-            mst.addEdge(arcoMinimo.da, arcoMinimo.a, arcoMinimo.peso);
-
-            T nuovoNodo = arcoMinimo.a;
-            visitati.add(nuovoNodo);
-
-            for (var entry : nodes.get(nuovoNodo).getAdjacencies().entrySet()) {
-                T vicino = entry.getKey().getValue();
-                if (!visitati.contains(vicino)) {
-                    codaArchi.add(new Arco(nuovoNodo, vicino, entry.getValue()));
+        // lista degli archi, ognuno una sola volta
+        ArrayList<Edge<T>> edges = new ArrayList<>();
+        HashSet<T> elaborati = new HashSet<>();
+        for (int i = 0; i < keys.size(); i++) {
+            T u = keys.get(i);
+            ArrayList<Adiacenza<T>> adj = new ArrayList<>(nodes.get(u).values());
+            for (int j = 0; j < adj.size(); j++) {
+                Adiacenza<T> a = adj.get(j);
+                if (!elaborati.contains(a.getNodo())) {
+                    edges.add(new Edge<>(u, a.getNodo(), a.getPeso()));
                 }
             }
+            elaborati.add(u);
         }
+        Collections.sort(edges);
+
+        HashMap<T, T> parent = new HashMap<>();
+        GraphNotOriented<T> mst = new GraphNotOriented<>();
+        for (int i = 0; i < keys.size(); i++) {
+            parent.put(keys.get(i), keys.get(i));
+            mst.addNode(keys.get(i));
+        }
+
+        for (int i = 0; i < edges.size(); i++) {
+            Edge<T> e = edges.get(i);
+            T ru = find(parent, e.source);
+            T rv = find(parent, e.dest);
+            if (!ru.equals(rv)) {
+                parent.put(ru, rv);
+                mst.addEdge(e.source, e.dest, e.weight);
+            }
+        }
+
         return mst;
     }
 
-    public GraphNotOriented<T> kruskal() {
-        GraphNotOriented<T> mst = new GraphNotOriented<>();
-        Map<T, T> parent = new HashMap<>();
-        List<Arco> tuttiGliArchi = new ArrayList<>();
-
-        for (T nodoVal : nodes.keySet()) {
-            mst.addNode(nodoVal);
-            parent.put(nodoVal, nodoVal);
-
-            for (var entry : nodes.get(nodoVal).getAdjacencies().entrySet()) {
-                tuttiGliArchi.add(new Arco(nodoVal, entry.getKey().getValue(), entry.getValue()));
-            }
+    // Albero di copertura minimo della componente connessa che contiene radix
+    public GraphNotOriented<T> prim(T radix) {
+        if (!nodes.containsKey(radix)) {
+            throw new IllegalArgumentException("Nodo radice inesistente: " + radix);
         }
 
-        tuttiGliArchi.sort((a, b) -> Float.compare(a.peso, b.peso));
+        GraphNotOriented<T> mst = new GraphNotOriented<>();
+        HashSet<T> inseriti = new HashSet<>();
+        mst.addNode(radix);
+        inseriti.add(radix);
 
-        for (Arco arco : tuttiGliArchi) {
-            T radiceDa = arco.da;
-            while (!parent.get(radiceDa).equals(radiceDa)) {
-                radiceDa = parent.get(radiceDa);
+        while (true) {
+            // arco di peso minimo che esce dall'albero verso un nodo non ancora inserito
+            T from = null;
+            Adiacenza<T> migliore = null;
+            ArrayList<T> ins = new ArrayList<>(inseriti);
+            for (int i = 0; i < ins.size(); i++) {
+                T u = ins.get(i);
+                ArrayList<Adiacenza<T>> adj = new ArrayList<>(nodes.get(u).values());
+                for (int j = 0; j < adj.size(); j++) {
+                    Adiacenza<T> a = adj.get(j);
+                    if (!inseriti.contains(a.getNodo())
+                            && (migliore == null || a.getPeso() < migliore.getPeso())) {
+                        from = u;
+                        migliore = a;
+                    }
+                }
             }
 
-            T radiceA = arco.a;
-            while (!parent.get(radiceA).equals(radiceA)) {
-                radiceA = parent.get(radiceA);
-            }
+            if (migliore == null) break;
 
-            if (!radiceDa.equals(radiceA)) {
-                mst.addEdge(arco.da, arco.a, arco.peso);
-                parent.put(radiceDa, radiceA);
-            }
+            mst.addEdge(from, migliore.getNodo(), migliore.getPeso());
+            inseriti.add(migliore.getNodo());
         }
 
         return mst;

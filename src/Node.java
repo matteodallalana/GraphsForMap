@@ -27,7 +27,7 @@ public class Node<T> {
         this.adjacencies.forEach((node, weight) -> {
             sb.append(this.value)
                     .append(" -> ")
-                    .append(node.getValue()) // Usa getValue()
+                    .append(node.getValue())
                     .append(" (weight: ")
                     .append(weight)
                     .append(")\n");

@@ -1,8 +1,10 @@
+import java.io.IOException;
 import java.util.HashMap;
 
 public class Main {
-    public static void main(String[] args) {
-
+    public static void main(String[] args) throws IOException {
+        Client client = new Client();
+        client.sendMessage("MOVE,00,01");
         System.out.println("1. TEST GRAFO ORIENTATO ");
 
         GraphOriented<String> go = new GraphOriented<>();
@@ -30,7 +32,7 @@ public class Main {
 
 
 
-        System.out.println("\n Struttura del Grafo Orientato ");
+        System.out.println(" Struttura del Grafo Orientato ");
         System.out.print(go);
 
         System.out.println(" Esecuzione Dijkstra (Sorgente: A) ");
@@ -66,13 +68,13 @@ public class Main {
         gno.addEdge("C", "E", 4);
         gno.addEdge("F", "E", 2);
 
-        System.out.println("\n Struttura del Grafo Non Orientato Originale ");
+        System.out.println(" Struttura del Grafo Non Orientato Originale ");
         System.out.print(gno);
 
         System.out.println(" Calcolo del Minimum Spanning Tree Prim");
         GraphNotOriented<String> mstPrim = gno.prim("A");
 
-        System.out.println("\n Struttura del MST");
+        System.out.println(" Struttura del MST");
         System.out.print(mstPrim);
 
         System.out.println(" Calcolo del Minimum Spanning Tree Kruskal");
@@ -83,7 +85,7 @@ public class Main {
 
     }
 
-    private static void stampaRisultatiDistanze(HashMap<String, Distance<String>> mappaRisultati) {
+    private static void stampaRisultatiDistanze(HashMap<String, Distance<String>> mappaRisultati) throws IOException {
         if (mappaRisultati == null) {
             System.out.println("Nessun risultato disponibile");
             return;
@@ -95,5 +97,6 @@ public class Main {
             System.out.println("Nodo [" + nodoDestinazione + "] -> Distanza Totale: " + distStr + ", Nodo Precedente: " + prevStr);
         });
         System.out.println();
+
     }
 }
