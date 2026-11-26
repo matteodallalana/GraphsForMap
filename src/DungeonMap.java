@@ -9,10 +9,6 @@ public final class DungeonMap {
     private DungeonMap() {
     }
 
-    /**
-     * Formato:
-     * 0000[0001:1;0400:4]0400[0402:2;0600:2]
-     */
     public static DungeonMap parse(String testo) {
         if (testo == null || testo.trim().isEmpty()) {
             throw new IllegalArgumentException("La mappa è vuota");
@@ -29,8 +25,7 @@ public final class DungeonMap {
 
             int parentesi = nodoTesto.indexOf('[');
             if (parentesi < 0) {
-                throw new IllegalArgumentException(
-                        "Nodo senza lista di adiacenze: " + nodoTesto);
+                throw new IllegalArgumentException("Nodo senza lista di adiacenze: " + nodoTesto);
             }
 
             String sorgente = nodoTesto.substring(0, parentesi).trim();
@@ -46,9 +41,7 @@ public final class DungeonMap {
             for (String adiacenza : adiacenze.split(";")) {
                 String[] dati = adiacenza.trim().split(":");
                 if (dati.length != 2) {
-                    throw new IllegalArgumentException(
-                            "Adiacenza non valida '" + adiacenza
-                                    + "' nel nodo " + sorgente);
+                    throw new IllegalArgumentException("Adiacenza non valida '" + adiacenza + "' nel nodo " + sorgente);
                 }
 
                 String destinazione = dati[0].trim();
@@ -62,9 +55,7 @@ public final class DungeonMap {
                 }
 
                 if (!Float.isFinite(distanza) || distanza < 0) {
-                    throw new IllegalArgumentException(
-                            "La distanza deve essere finita e non negativa: "
-                                    + distanza);
+                    throw new IllegalArgumentException("La distanza deve essere finita e non negativa: " + distanza);
                 }
 
                 mappa.graph.addEdge(sorgente, destinazione, distanza);
@@ -77,8 +68,7 @@ public final class DungeonMap {
 
     private static void validaId(String id) {
         if (id == null || !id.matches("\\d{4}")) {
-            throw new IllegalArgumentException(
-                    "Identificativo nodo non valido (attese 4 cifre): " + id);
+            throw new IllegalArgumentException("Identificativo nodo non valido (attese 4 cifre): " + id);
         }
     }
 
@@ -92,12 +82,10 @@ public final class DungeonMap {
 
     public List<String> shortestPath(String partenza, String destinazione) {
         if (!containsNode(partenza)) {
-            throw new IllegalArgumentException(
-                    "Nodo sorgente inesistente: " + partenza);
+            throw new IllegalArgumentException("Nodo sorgente inesistente: " + partenza);
         }
         if (!containsNode(destinazione)) {
-            throw new IllegalArgumentException(
-                    "Nodo destinazione inesistente: " + destinazione);
+            throw new IllegalArgumentException("Nodo destinazione inesistente: " + destinazione);
         }
 
         HashMap<String, Distance<String>> distanze = graph.dijkstra(partenza);
@@ -171,7 +159,6 @@ public final class DungeonMap {
                     estremi[1],
                     entry.getValue());
         }
-
         return grafoNonOrientato.prim(radice);
     }
 

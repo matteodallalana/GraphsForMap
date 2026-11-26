@@ -11,6 +11,7 @@ public class Client implements AutoCloseable {
     private PrintWriter out;
     private BufferedReader in;
     private boolean loggedIn;
+    private String posizioneIniziale;
 
     public void start() throws IOException {
         start("127.0.0.1", 9000);
@@ -33,58 +34,94 @@ public class Client implements AutoCloseable {
             throw new IllegalStateException("Connessione non avviata");
         }
 
+        posizioneIniziale = null;
         out.println("login," + personaggio);
+        String datiMappa = null;
 
-        String risposta = readMessage();
-        if (risposta == null) {
-            throw new IOException("Connessione chiusa dal server durante il login");
-        }
+        while (datiMappa == null || posizioneIniziale == null) {
+            String risposta = readMessage();
 
-        if (risposta.startsWith("ERROR")) {
-            throw new IOException("Errore del server: " + risposta);
-        }
-
-        String datiMappa;
-
-        if (risposta.equals("MAP")) {
-            datiMappa = readMessage();
-            if (datiMappa == null) {
-                throw new IOException("Mappa non ricevuta dopo il messaggio MAP");
+            if (risposta == null) {
+                throw new IOException(
+                        "Connessione chiusa durante il login");
             }
-        } else if (risposta.startsWith("MAP")) {
-            datiMappa = risposta.substring(3).trim();
-
-            if (datiMappa.startsWith(",")
-                    || datiMappa.startsWith(":")
-                    || datiMappa.startsWith(" ")) {
-                datiMappa = datiMappa.substring(1).trim();
+            if (risposta.startsWith("ERROR")) {
+                throw new IOException("Errore del server: " + risposta);
             }
-        } else {
-            throw new IOException("Risposta di login inattesa: " + risposta);
+
+            if (risposta.startsWith("START")) {
+                posizioneIniziale = parsePosizione(risposta);
+            } else if (risposta.equals("MAP")) {
+                datiMappa = readMessage();
+                if (datiMappa == null) {
+                    throw new IOException(
+                            "Mappa non ricevuta dopo il messaggio MAP");
+                }
+            } else if (risposta.startsWith("MAP")) {
+                datiMappa = risposta.substring(3).trim();
+
+                if (datiMappa.startsWith(",")
+                        || datiMappa.startsWith(":")) {
+                    datiMappa = datiMappa.substring(1).trim();
+                }
+            } else {
+                throw new IOException(
+                        "Risposta di login inattesa: " + risposta);
+            }
         }
 
         if (datiMappa.isEmpty()) {
             throw new IOException("Il server ha inviato una mappa vuota");
         }
 
+        DungeonMap mappa = DungeonMap.parse(datiMappa);
+
+        if (!mappa.containsNode(posizioneIniziale)) {
+            throw new IOException(
+                    "La posizione iniziale " + posizioneIniziale
+                            + " non è presente nella mappa");
+        }
+
         loggedIn = true;
-        return DungeonMap.parse(datiMappa);
+        return mappa;
+    }
+
+    private String parsePosizione(String risposta) throws IOException {
+        String[] dati = risposta.split(",");
+        if (dati.length != 3) {
+            throw new IOException("Risposta START non valida: " + risposta);
+        }
+
+        try {
+            int colonna = Integer.parseInt(dati[1].trim());
+            int riga = Integer.parseInt(dati[2].trim());
+            return NodeMap.buildId(riga, colonna);
+        } catch (NumberFormatException e) {
+            throw new IOException("Risposta START non valida: " + risposta, e);
+        }
+    }
+
+    public String getPosizioneIniziale() {
+        return posizioneIniziale;
     }
 
     public String sendCommand(String comando) throws IOException {
         if (!loggedIn) {
-            throw new IllegalStateException("Effettuare il login prima di inviare comandi");
+            throw new IllegalStateException(
+                    "Effettuare il login prima di inviare comandi");
         }
 
         out.println(comando);
-        String risposta = readMessage();
 
+        String risposta = readMessage();
         if (risposta == null) {
             throw new IOException("Connessione chiusa dal server");
         }
+
         if (risposta.startsWith("ERROR")) {
             throw new IOException("Errore del server: " + risposta);
         }
+
         return risposta;
     }
 

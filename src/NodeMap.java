@@ -1,6 +1,5 @@
 
 public class NodeMap {
-
     private final String id;
     private final int riga;
     private final int colonna;
@@ -8,8 +7,11 @@ public class NodeMap {
     public NodeMap(int riga, int colonna) {
         if (riga < 0 || riga > 99 || colonna < 0 || colonna > 99) {
             throw new IllegalArgumentException(
-                    "Riga e colonna devono essere tra 0 e 99: riga=" + riga + ", colonna=" + colonna);
+                    "Riga e colonna devono essere tra 0 e 99: "
+                            + "riga=" + riga
+                            + ", colonna=" + colonna);
         }
+
         this.riga = riga;
         this.colonna = colonna;
         this.id = buildId(riga, colonna);
@@ -17,14 +19,21 @@ public class NodeMap {
 
     public NodeMap(String id) {
         if (id == null || !id.matches("\\d{4}")) {
-            throw new IllegalArgumentException("Id non valido (atteso ccrr, 4 cifre): " + id);
+            throw new IllegalArgumentException(
+                    "Id non valido (atteso ccrr, 4 cifre)");
         }
+
         this.id = id;
         this.colonna = Integer.parseInt(id.substring(0, 2));
         this.riga = Integer.parseInt(id.substring(2, 4));
     }
 
     public static String buildId(int riga, int colonna) {
+        if (riga < 0 || riga > 99
+                || colonna < 0 || colonna > 99) {
+            throw new IllegalArgumentException(
+                    "Riga e colonna devono essere tra 0 e 99");
+        }
         return pad2(colonna) + pad2(riga);
     }
 
@@ -54,8 +63,12 @@ public class NodeMap {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof NodeMap)) return false;
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof NodeMap)) {
+            return false;
+        }
         return id.equals(((NodeMap) o).id);
     }
 
