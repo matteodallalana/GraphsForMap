@@ -1,12 +1,10 @@
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Random;
 
 public class MapClient {
     private static final String HOST = "127.0.0.1";
     private static final int PORTA = 9000;
+    private static final long PAUSA_TRA_MOSSE_MS = 500;
 
     public static void main(String[] args) throws IOException {
         int personaggio = args.length > 0
@@ -20,130 +18,98 @@ public class MapClient {
 
         try (Client client = new Client()) {
             client.start(HOST, PORTA);
-            int nPersonaggio = (int)(Math.random() * 3);
-            DungeonMap mappa = client.login(nPersonaggio);
-            Thread.sleep(1000);
+
+            DungeonMap mappa = client.login(personaggio);
+            String posizione = client.getPosizioneIniziale();
+            String target = client.getTargetIniziale();
 
             System.out.println("Personaggio " + personaggio + " collegato.");
-            System.out.println("Mappa ricevuta:");
-            System.out.println(mappa);
-
-            if (mappa.getNodes().isEmpty()) {
-                throw new IllegalStateException("La mappa non contiene nodi");
-            }
-
-            String radice = args.length > 1
-                    ? args[1]
-                    : mappa.getNodes().get(0);
-
-            if (!mappa.containsNode(radice)) {
-                throw new IllegalArgumentException(
-                        "La radice non è presente nella mappa: " + radice);
-            }
-
-            GraphNotOriented<String> mst =
-                    mappa.minimumSpanningTreeFrom(radice);
-
-            System.out.println();
-            System.out.println("Minimum spanning tree con radice " + radice + ":");
-            System.out.println(mst);
-
-            Random random = new Random();
-            List<String> nodi = mappa.getNodes();
-
-            String posizione = client.getPosizioneIniziale();
-            if (posizione == null) {
-                posizione = mappa.containsNode("0000") ? "0000" : radice;
-            }
-
-            if (!mappa.containsNode(posizione)) {
-                throw new IllegalStateException(
-                        "Posizione iniziale non presente nella mappa: " + posizione);
-            }
-
             System.out.println("Posizione iniziale: " + posizione);
+            System.out.println("Target iniziale: " + target);
+            System.out.println();
 
             while (true) {
-                HashMap<String, Distance<String>> distanze =
-                        mappa.distancesFrom(posizione);
-
-                List<String> destinazioniRaggiungibili =
-                        new ArrayList<>();
-
-                for (String nodo : nodi) {
-                    Distance<String> distanza = distanze.get(nodo);
-
-                    if (!nodo.equals(posizione)
-                            && distanza != null
-                            && distanza.getDistance()
-                            != Float.POSITIVE_INFINITY) {
-                        destinazioniRaggiungibili.add(nodo);
-                    }
+                if (!mappa.containsNode(posizione)) {
+                    throw new IllegalStateException(
+                            "Posizione fuori dal dungeon: " + posizione);
                 }
 
-                if (destinazioniRaggiungibili.isEmpty()) {
+                if (!mappa.containsNode(target)) {
+                    throw new IllegalStateException(
+                            "Target fuori dal dungeon: " + target);
+                }
+
+                if (posizione.equals(target)) {
                     System.out.println(
-                            "Nessun altro nodo raggiungibile da "
-                                    + posizione + ".");
+                            "Il target coincide già con la posizione "
+                                    + posizione
+                                    + ". Il server potrebbe non generare "
+                                    + "un nuovo target: termino il client.");
                     break;
                 }
-
-                String destinazione =
-                        destinazioniRaggiungibili.get(
-                                random.nextInt(
-                                        destinazioniRaggiungibili.size()));
 
                 List<String> percorso =
-                        mappa.shortestPath(posizione, destinazione);
+                        mappa.shortestPath(posizione, target);
 
-                if (percorso.size() < 2) {
-                    System.out.println("Percorso non valido da "
-                            + posizione + " a " + destinazione
-                            + "; termino.");
-                    break;
+                if (percorso == null || percorso.size() < 2) {
+                    throw new IllegalStateException(
+                            "Nessun percorso valido da "
+                                    + posizione + " verso " + target);
                 }
 
-                System.out.println(
-                        "Destinazione casuale: " + destinazione);
-
-                boolean percorsoCompletato = true;
+                boolean nuovoTarget = false;
 
                 for (int i = 1; i < percorso.size(); i++) {
-                    NodeMap passo = new NodeMap(percorso.get(i));
+                    String idPasso = percorso.get(i);
+
+                    if (!mappa.containsNode(idPasso)) {
+                        throw new IllegalStateException(
+                                "Il percorso contiene un nodo fuori "
+                                        + "dal dungeon: " + idPasso);
+                    }
+
+                    NodeMap passo = new NodeMap(idPasso);
 
                     String comando = "move,"
-                            + passo.getColonna() + ","
+                            + passo.getColonna()
+                            + ","
                             + passo.getRiga();
 
                     System.out.println("Invio comando: " + comando);
 
-                    try {
-                        String risposta = client.sendCommand(comando);
-                        System.out.println(comando + " -> " + risposta);
+                    String risposta = client.sendCommand(comando);
+                    System.out.println(comando + " -> " + risposta);
 
-                        // Aggiorna la posizione solo dopo una
-                        // risposta positiva del server.
-                        posizione = percorso.get(i);
+                    if (risposta.startsWith("OK")) {
+                        posizione = client.parseCoordinate(risposta);
 
-                        Thread.sleep(500);
-                    } catch (IOException e) {
-                        System.out.println(
-                                "Movimento rifiutato: " + e.getMessage());
-                        percorsoCompletato = false;
+                        try {
+                            Thread.sleep(PAUSA_TRA_MOSSE_MS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            return;
+                        }
+                    } else if (risposta.startsWith("SUCCESS")
+                            || risposta.startsWith("FAIL")) {
+                        posizione = client.parseCoordinate(risposta);
+                        target = client.readTarget();
+
+                        System.out.println("Nuova posizione: " + posizione);
+                        System.out.println("Nuovo target: " + target);
+
+                        nuovoTarget = true;
                         break;
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return;
+                    } else {
+                        throw new IOException(
+                                "Risposta inattesa del server: " + risposta);
                     }
                 }
 
-                if (!percorsoCompletato) {
-                    break;
+                if (!nuovoTarget) {
+                    System.out.println(
+                            "Percorso completato; posizione: " + posizione);
                 }
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException(e);
         }
     }
 }

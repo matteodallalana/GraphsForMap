@@ -12,6 +12,7 @@ public class Client implements AutoCloseable {
     private BufferedReader in;
     private boolean loggedIn;
     private String posizioneIniziale;
+    private String targetIniziale;
 
     public void start() throws IOException {
         start("127.0.0.1", 9000);
@@ -19,40 +20,56 @@ public class Client implements AutoCloseable {
 
     public void start(String host, int port) throws IOException {
         socket = new Socket(host, port);
+
         out = new PrintWriter(
-                new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8),
+                new OutputStreamWriter(
+                        socket.getOutputStream(),
+                        StandardCharsets.UTF_8),
                 true);
+
         in = new BufferedReader(
-                new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                new InputStreamReader(
+                        socket.getInputStream(),
+                        StandardCharsets.UTF_8));
     }
 
     public DungeonMap login(int personaggio) throws IOException {
         if (personaggio < 0 || personaggio > 2) {
-            throw new IllegalArgumentException("Il personaggio deve essere 0, 1 o 2");
+            throw new IllegalArgumentException(
+                    "Il personaggio deve essere 0, 1 o 2");
         }
+
         if (socket == null || socket.isClosed()) {
             throw new IllegalStateException("Connessione non avviata");
         }
 
         posizioneIniziale = null;
-        out.println("login," + personaggio);
+        targetIniziale = null;
         String datiMappa = null;
 
-        while (datiMappa == null || posizioneIniziale == null) {
+        out.println("login," + personaggio);
+
+        while (datiMappa == null
+                || posizioneIniziale == null
+                || targetIniziale == null) {
             String risposta = readMessage();
 
             if (risposta == null) {
                 throw new IOException(
                         "Connessione chiusa durante il login");
             }
+
             if (risposta.startsWith("ERROR")) {
                 throw new IOException("Errore del server: " + risposta);
             }
 
             if (risposta.startsWith("START")) {
-                posizioneIniziale = parsePosizione(risposta);
+                posizioneIniziale = parseCoordinate(risposta);
+            } else if (risposta.startsWith("TARGET")) {
+                targetIniziale = parseCoordinate(risposta);
             } else if (risposta.equals("MAP")) {
                 datiMappa = readMessage();
+
                 if (datiMappa == null) {
                     throw new IOException(
                             "Mappa non ricevuta dopo il messaggio MAP");
@@ -78,31 +95,61 @@ public class Client implements AutoCloseable {
 
         if (!mappa.containsNode(posizioneIniziale)) {
             throw new IOException(
-                    "La posizione iniziale " + posizioneIniziale
-                            + " non è presente nella mappa");
+                    "Posizione iniziale non presente nella mappa: "
+                            + posizioneIniziale);
+        }
+
+        if (!mappa.containsNode(targetIniziale)) {
+            throw new IOException(
+                    "Target iniziale non presente nella mappa: "
+                            + targetIniziale);
         }
 
         loggedIn = true;
         return mappa;
     }
 
-    private String parsePosizione(String risposta) throws IOException {
+    public String getPosizioneIniziale() {
+        return posizioneIniziale;
+    }
+
+    public String getTargetIniziale() {
+        return targetIniziale;
+    }
+
+    public String parseCoordinate(String risposta) throws IOException {
         String[] dati = risposta.split(",");
+
         if (dati.length != 3) {
-            throw new IOException("Risposta START non valida: " + risposta);
+            throw new IOException("Coordinate non valide: " + risposta);
         }
 
         try {
             int colonna = Integer.parseInt(dati[1].trim());
             int riga = Integer.parseInt(dati[2].trim());
+
             return NodeMap.buildId(riga, colonna);
         } catch (NumberFormatException e) {
-            throw new IOException("Risposta START non valida: " + risposta, e);
+            throw new IOException(
+                    "Coordinate non valide: " + risposta,
+                    e);
         }
     }
 
-    public String getPosizioneIniziale() {
-        return posizioneIniziale;
+    public String readTarget() throws IOException {
+        String risposta = readMessage();
+
+        if (risposta == null) {
+            throw new IOException(
+                    "Connessione chiusa dal server");
+        }
+
+        if (!risposta.startsWith("TARGET")) {
+            throw new IOException(
+                    "Messaggio TARGET atteso: " + risposta);
+        }
+
+        return parseCoordinate(risposta);
     }
 
     public String sendCommand(String comando) throws IOException {
@@ -114,39 +161,36 @@ public class Client implements AutoCloseable {
         out.println(comando);
 
         String risposta = readMessage();
+
         if (risposta == null) {
             throw new IOException("Connessione chiusa dal server");
         }
 
         if (risposta.startsWith("ERROR")) {
-            throw new IOException("Errore del server: " + risposta);
+            throw new IOException("Comando non valido: " + risposta);
         }
 
         return risposta;
     }
 
-    public String sendMessage(String comando) throws IOException {
-        return sendCommand(comando);
-    }
-
     public String readMessage() throws IOException {
         if (in == null) {
-            throw new IllegalStateException("Connessione non avviata");
+            throw new IllegalStateException(
+                    "Connessione non avviata");
         }
 
         String risposta = in.readLine();
         return risposta == null ? null : risposta.trim();
     }
 
-    public void stopConnection() throws IOException {
-        close();
-    }
-
     @Override
     public void close() throws IOException {
         IOException erroreChiusura = null;
 
-        if (out != null && loggedIn && socket != null && !socket.isClosed()) {
+        if (out != null
+                && loggedIn
+                && socket != null
+                && !socket.isClosed()) {
             out.println("logout");
             out.flush();
             loggedIn = false;
